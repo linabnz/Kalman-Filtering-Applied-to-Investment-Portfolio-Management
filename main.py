@@ -1,57 +1,59 @@
-# main.py
-import argparse
+import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
-from models.cointegration import CointegrationModel
-from models.partial_cointegration import PartialCointegrationModel
-from models.kalman_filter import KalmanFilter
-from utils.data_loader import load_stock_data
-from strategies.pairs_trading import PairsTrading
-from strategies.statistical_arbitrage import StatisticalArbitrage
+import plotly.graph_objects as go
+
+# Charger les données
+@st.cache_data
+def load_data():
+    prices = pd.read_csv('data/jse_stocks.csv', index_col='Date', parse_dates=True)
+    results = pd.read_csv('results/cointegration_results.csv')
+    return prices, results
 
 def main():
-    parser = argparse.ArgumentParser(description='Kalman Filter Portfolio Management')
-    parser.add_argument('--data_path', type=str, default='data/stocks.csv', help='Path to stock price data')
-    parser.add_argument('--strategy', type=str, default='partial_coint', 
-                        choices=['pairs', 'coint', 'partial_coint', 'cnn_rl'],
-                        help='Trading strategy to use')
-    parser.add_argument('--viz', action='store_true', help='Visualize results')
-    args = parser.parse_args()
-    
-  
-    data = load_stock_data(args.data_path)
-    
-   
-    if args.strategy == 'pairs':
-        strategy = PairsTrading(significance_level=0.05, z_threshold=2.0)
-    elif args.strategy == 'coint':
-        strategy = StatisticalArbitrage(model='cointegration', z_threshold=2.0)
-    elif args.strategy == 'partial_coint':
-        strategy = StatisticalArbitrage(model='partial_cointegration', 
-                                        rho=0.7, kalman_gain=0.7, z_threshold=1.25)
-    elif args.strategy == 'cnn_rl':
+    st.set_page_config(page_title="Kalman Portfolio Management", layout="wide")
+    st.markdown("<h1 style='text-align: center; color: #4CAF50;'>Kalman Portfolio Management </h1>", unsafe_allow_html=True)
+
+    prices, results = load_data()
+
+    with st.sidebar:
+        st.header(" Sélection d'une paire")
+        results = results.sort_values(by='Sharpe', ascending=False).reset_index(drop=True)
+        options = [f"{row['Ticker1']} - {row['Ticker2']} (Sharpe: {row['Sharpe']:.2f})" for _, row in results.iterrows()]
+        choix = st.selectbox("Choisissez une paire :", options)
+        start_analysis = st.button("Analyser cette paire")
+
+    if start_analysis:
+        selected_idx = options.index(choix)
+        selected_pair = results.iloc[selected_idx]
+        ticker1 = selected_pair['Ticker1']
+        ticker2 = selected_pair['Ticker2']
+
+        st.success(f"Paire sélectionnée : {ticker1} et {ticker2}")
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Ticker 1", ticker1)
+        with col2:
+            st.metric("Ticker 2", ticker2)
+        with col3:
+            st.metric("Sharpe Ratio", f"{selected_pair['Sharpe']:.2f}")
+
+        st.subheader(" Evolution normalisée des prix (Base 100)")
+
+        common = prices[[ticker1, ticker2]].dropna()
+        normalized = common / common.iloc[0] * 100
+
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=normalized.index, y=normalized[ticker1], name=ticker1))
+        fig.add_trace(go.Scatter(x=normalized.index, y=normalized[ticker2], name=ticker2))
+        fig.update_layout(title="Prix normalisés", xaxis_title="Date", yaxis_title="Prix (base 100)",
+                          legend_title="Tickers", height=600, template="plotly_white")
         
-        pass
-    
+        st.plotly_chart(fig, use_container_width=True)
 
-    portfolio_value, trades = strategy.backtest(data)
-    
+        st.balloons()
 
-    print(f"Strategy: {args.strategy}")
-    print(f"Final portfolio value: {portfolio_value[-1]:.2f}")
-    print(f"Number of trades: {len(trades)}")
-    print(f"Sharpe ratio: {strategy.calculate_sharpe_ratio():.2f}")
-    
-   
-    if args.viz:
-        plt.figure(figsize=(12, 6))
-        plt.plot(portfolio_value, label=f'{args.strategy} strategy')
-        plt.plot(data['market_index'], label='Market Index')
-        plt.title('Portfolio Performance')
-        plt.xlabel('Time')
-        plt.ylabel('Value')
-        plt.legend()
-        plt.show()
+        st.info("Prochaines étapes : Application du Kalman Filter et trading sur le spread ")
 
 if __name__ == "__main__":
     main()
