@@ -18,6 +18,8 @@ class CointegrationTrader:
         self.profit_target = profit_target
         self.z_window = z_window
         self.trades = []
+        self.test_residuals = None
+        self.z_scores = None
 
     def run_backtest(
         self,
@@ -31,33 +33,54 @@ class CointegrationTrader:
             print("No cointegration detected in training period.")
             return pd.DataFrame()
 
-        # Calculate residuals on the test period using the trained model
-        test_residuals = y_test - self.model.predict(x_test)
-        z_scores = (test_residuals - self.model.mu_train) / self.model.sigma_train
-        open_trade = None
-        equity_curve = []
+        self.test_residuals = y_test - self.model.predict(x_test)
+        self.z_scores = (
+            self.test_residuals - self.model.mu_train
+        ) / self.model.sigma_train
 
-        for t in range(len(z_scores)):
-            z = z_scores[t]
+        open_trade = None
+        trades_log = []
+
+        for t in range(len(self.z_scores)):
+            z = self.z_scores.iloc[t]
+            date = y_test.index[t]
             price_y = y_test.iloc[t]
             price_x = x_test.iloc[t]
-            pnl = 0  # Initialize pnl with a default value
+            pnl = 0
 
             if open_trade is None:
                 if z > self.entry_threshold:
                     open_trade = {
-                        "entry_time": t,
+                        "entry_time": date,
                         "side": "short_y_long_x",
                         "entry_price_y": price_y,
                         "entry_price_x": price_x,
+                        "entry_z": z,
                     }
+                    trades_log.append(
+                        {
+                            "date": date,
+                            "position": 1,
+                            "z_score": z,
+                            "pnl": 0,
+                        }
+                    )
                 elif z < -self.entry_threshold:
                     open_trade = {
-                        "entry_time": t,
+                        "entry_time": date,
                         "side": "long_y_short_x",
                         "entry_price_y": price_y,
                         "entry_price_x": price_x,
+                        "entry_z": z,
                     }
+                    trades_log.append(
+                        {
+                            "date": date,
+                            "position": -1,
+                            "z_score": z,
+                            "pnl": 0,
+                        }
+                    )
 
             else:
                 hedge_ratio = self.model.beta
@@ -73,20 +96,30 @@ class CointegrationTrader:
                         entry_price_x - price_x
                     )
 
+                # Exit conditions
                 if abs(z) < 0.1 or pnl < -self.stop_loss or pnl > self.profit_target:
                     self.trades.append(
                         {
                             "entry_time": open_trade["entry_time"],
-                            "exit_time": t,
+                            "exit_time": date,
                             "side": open_trade["side"],
-                            "entry_price_y": open_trade["entry_price_y"],
-                            "entry_price_x": open_trade["entry_price_x"],
+                            "entry_price_y": entry_price_y,
+                            "entry_price_x": entry_price_x,
                             "exit_price_y": price_y,
                             "exit_price_x": price_x,
                             "pnl": pnl,
                         }
                     )
+
+                    trades_log.append(
+                        {
+                            "date": date,
+                            "position": 0,
+                            "z_score": z,
+                            "pnl": pnl,
+                        }
+                    )
+
                     open_trade = None
 
-            equity_curve.append(pnl if open_trade else 0)
-        return pd.DataFrame(self.trades)
+        return pd.DataFrame(trades_log)

@@ -8,3 +8,4 @@ pytorch
 scipy
 streamlit
 plotly
+yfinance

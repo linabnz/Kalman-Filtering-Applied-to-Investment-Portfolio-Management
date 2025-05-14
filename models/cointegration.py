@@ -53,6 +53,8 @@ class CointegrationModel:
         self.beta = beta
         self.intercept = intercept
         self.residuals = y - (beta * x + intercept)
+        self.mu_train = np.mean(self.residuals)
+        self.sigma_train = np.std(self.residuals)
 
         # Test if residuals are stationary (cointegration test)
         adf_result = adfuller(self.residuals)
@@ -87,9 +89,8 @@ class CointegrationModel:
         z_scores = z_scores.fillna(0)
 
         self.z_scores = z_scores.values
-        self.mu_train = np.mean(self.residuals)
-        self.sigma_train = np.std(self.residuals)
-        return self.z_scores, self.mu_train, self.sigma_train
+
+        return self.z_scores
 
     def predict(self, x: Union[pd.Series, np.ndarray]) -> np.ndarray:
         """
