@@ -113,7 +113,6 @@ def download_jse_data(start_date='2015-01-01', end_date=None, min_history_years=
         print(f"Téléchargement du lot {i//batch_size + 1}/{(len(all_tickers)-1)//batch_size + 1}: {', '.join(batch_tickers)}")
         
         try:
-          
             batch_data = yf.download(
                 tickers=batch_tickers,
                 start=start_date,
@@ -129,7 +128,6 @@ def download_jse_data(start_date='2015-01-01', end_date=None, min_history_years=
                 ticker = batch_tickers[0]
                 batch_data = pd.DataFrame({ticker: batch_data['Close']}, index=batch_data.index)
             else:
-                
                 close_data = pd.DataFrame()
                 for ticker in batch_tickers:
                     if ticker in batch_data.columns:
