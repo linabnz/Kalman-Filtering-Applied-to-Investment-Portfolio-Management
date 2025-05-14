@@ -34,7 +34,7 @@ class CointegrationModel:
         Returns:
             Self
         """
-        # Convert inputs to numpy arrays if they are pandas Series
+        
         if isinstance(y, pd.Series):
             y = y.values
         if isinstance(x, pd.Series):
@@ -43,14 +43,14 @@ class CointegrationModel:
         # Add constant term for intercept
         X = np.vstack([x, np.ones(len(x))]).T
         
-        # Perform linear regression
+     
         beta, intercept = np.linalg.lstsq(X, y, rcond=None)[0]
         
         self.beta = beta
         self.intercept = intercept
         self.residuals = y - (beta * x + intercept)
         
-        # Test if residuals are stationary (cointegration test)
+        
         adf_result = adfuller(self.residuals)
         self.is_cointegrated = adf_result[1] < self.significance_level
         

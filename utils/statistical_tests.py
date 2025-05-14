@@ -41,11 +41,10 @@ def engle_granger_test(x: Union[pd.Series, np.ndarray],
     Returns:
         Dictionary with test results
     """
-    # Step 1: Perform regression
+    
     X = np.vstack([x, np.ones(len(x))]).T
     beta = np.linalg.lstsq(X, y, rcond=None)[0]
-    
-    # Step 2: Test for stationarity of residuals
+   
     residuals = y - (beta[0] * x + beta[1])
     adf_result = adf_test(residuals, significance_level)
     
