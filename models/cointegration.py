@@ -46,6 +46,9 @@ class CointegrationModel:
         self.sigma = np.std(residuals)
 
         # Stationarity test (ADF)
+        if np.std(residuals) == 0:
+            self.is_cointegrated = False
+            return self
         adf_result = adfuller(residuals)
         self.is_cointegrated = adf_result[1] < self.significance_level
 
