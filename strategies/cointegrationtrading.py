@@ -1,102 +1,95 @@
-from models.cointegration import CointegrationModel
+from typing import List
 import pandas as pd
-from typing import Dict, List, Tuple, Union
+from statsmodels.tsa.stattools import adfuller
+import numpy as np
+from models.cointegration import CointegrationModel
 
 
 class CointegrationTrader:
     def __init__(
         self,
         model: CointegrationModel,
-        entry_threshold: float = 3.0,
+        entry_threshold: float = 2.0,
         stop_loss: float = 0.05,
         profit_target: float = 0.05,
-        z_window: int = 20,
+        rolling_window: int = 60,
     ):
         self.model = model
         self.entry_threshold = entry_threshold
         self.stop_loss = stop_loss
         self.profit_target = profit_target
-        self.z_window = z_window
-        self.trades = []
-        self.test_residuals = None
-        self.z_scores = None
+        self.rolling_window = rolling_window
+        self.trades: List[dict] = []
 
     def run_backtest(
         self,
-        y_train: pd.Series,
-        x_train: pd.Series,
-        y_test: pd.Series,
-        x_test: pd.Series,
+        y: pd.Series,
+        x: pd.Series,
     ) -> pd.DataFrame:
-        self.model.fit(y_train, x_train)
-        if not self.model.is_cointegrated:
-            print("No cointegration detected in training period.")
-            return pd.DataFrame()
-
-        self.test_residuals = y_test - self.model.predict(x_test)
-        self.z_scores = (
-            self.test_residuals - self.model.mu_train
-        ) / self.model.sigma_train
-
-        open_trade = None
         trades_log = []
+        open_trade = None
+        frozen_model = None
 
-        for t in range(len(self.z_scores)):
-            z = self.z_scores.iloc[t]
-            date = y_test.index[t]
-            price_y = y_test.iloc[t]
-            price_x = x_test.iloc[t]
-            pnl = 0
+        for t in range(self.rolling_window, len(y)):
+            date = y.index[t]
+            y_train = y.iloc[t - self.rolling_window : t]
+            x_train = x.iloc[t - self.rolling_window : t]
+            y_t = y.iloc[t]
+            x_t = x.iloc[t]
 
             if open_trade is None:
+                self.model.fit(y_train, x_train)
+
+                if not self.model.is_cointegrated:
+                    continue
+
+                spread_t = y_t - (self.model.beta * x_t + self.model.intercept)
+                z = (spread_t - self.model.mu) / self.model.sigma
+
+                if self.model.sigma == 0 or pd.isna(z):
+                    continue
+
                 if z > self.entry_threshold:
                     open_trade = {
                         "entry_time": date,
                         "side": "short_y_long_x",
-                        "entry_price_y": price_y,
-                        "entry_price_x": price_x,
+                        "entry_price_y": y_t,
+                        "entry_price_x": x_t,
                         "entry_z": z,
                     }
+                    frozen_model = self.model
                     trades_log.append(
-                        {
-                            "date": date,
-                            "position": 1,
-                            "z_score": z,
-                            "pnl": 0,
-                        }
+                        {"date": date, "position": 1, "z_score": z, "pnl": 0}
                     )
                 elif z < -self.entry_threshold:
                     open_trade = {
                         "entry_time": date,
                         "side": "long_y_short_x",
-                        "entry_price_y": price_y,
-                        "entry_price_x": price_x,
+                        "entry_price_y": y_t,
+                        "entry_price_x": x_t,
                         "entry_z": z,
                     }
+                    frozen_model = self.model
                     trades_log.append(
-                        {
-                            "date": date,
-                            "position": -1,
-                            "z_score": z,
-                            "pnl": 0,
-                        }
+                        {"date": date, "position": -1, "z_score": z, "pnl": 0}
                     )
-
             else:
-                hedge_ratio = self.model.beta
+                hedge_ratio = frozen_model.beta
+                intercept = frozen_model.intercept
+                mu = frozen_model.mu
+                sigma = frozen_model.sigma
+
+                spread_t = y_t - (hedge_ratio * x_t + intercept)
+                z = (spread_t - mu) / sigma
+
                 entry_price_y = open_trade["entry_price_y"]
                 entry_price_x = open_trade["entry_price_x"]
 
                 if open_trade["side"] == "long_y_short_x":
-                    pnl = (price_y - entry_price_y) - hedge_ratio * (
-                        price_x - entry_price_x
-                    )
+                    pnl = (y_t - entry_price_y) - hedge_ratio * (x_t - entry_price_x)
                 else:
-                    pnl = (entry_price_y - price_y) - hedge_ratio * (
-                        entry_price_x - price_x
-                    )
+                    pnl = (entry_price_y - y_t) - hedge_ratio * (entry_price_x - x_t)
 
-                # Exit conditions
                 if abs(z) < 0.1 or pnl < -self.stop_loss or pnl > self.profit_target:
                     self.trades.append(
                         {
@@ -105,21 +98,15 @@ class CointegrationTrader:
                             "side": open_trade["side"],
                             "entry_price_y": entry_price_y,
                             "entry_price_x": entry_price_x,
-                            "exit_price_y": price_y,
-                            "exit_price_x": price_x,
+                            "exit_price_y": y_t,
+                            "exit_price_x": x_t,
                             "pnl": pnl,
                         }
                     )
-
                     trades_log.append(
-                        {
-                            "date": date,
-                            "position": 0,
-                            "z_score": z,
-                            "pnl": pnl,
-                        }
+                        {"date": date, "position": 0, "z_score": z, "pnl": pnl}
                     )
-
                     open_trade = None
+                    frozen_model = None
 
         return pd.DataFrame(trades_log)

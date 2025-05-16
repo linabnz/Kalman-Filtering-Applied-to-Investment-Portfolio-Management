@@ -160,28 +160,6 @@ def download_jse_data(start_date="2015-01-01", end_date=None, min_history_years=
 
     missing_values = all_data.isnull().sum()
     print((missing_values > 0).sum())
-    # missing_pct = (missing_values / len(all_data)) * 100
-
-    # min_history_days = min_history_years * 252  # ~252 jours de trading par an
-    # valid_tickers = missing_values[
-    #     missing_values < (len(all_data) - min_history_days)
-    # ].index.tolist()
-
-    # if len(valid_tickers) < len(all_tickers):
-    #     print(
-    #         f"Suppression de {len(all_tickers) - len(valid_tickers)} actions avec historique insuffisant"
-    #     )
-    #     all_data = all_data[valid_tickers]
-
-    # missing_before = all_data.isnull().sum().sum()
-    # if missing_before > 0:
-    #     print(f"Valeurs manquantes avant traitement: {missing_before}")
-
-    #     all_data = all_data.ffill().bfill()
-    #     missing_after = all_data.isnull().sum().sum()
-    #     print(f"Valeurs manquantes après traitement: {missing_after}")
-
-    # drop columns with nan
     all_data = all_data.dropna(axis=1, how="any")
     print(f"Valeurs manquantes après traitement: {all_data.isnull().sum().sum()}")
 
