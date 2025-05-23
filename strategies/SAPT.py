@@ -2,10 +2,11 @@ from typing import List, Tuple
 import pandas as pd
 from statsmodels.tsa.stattools import adfuller
 import numpy as np
-from models.cointegrationModel import PartialCointegrationModel
+import torch
+from models.partial_cointegration import PartialCointegrationModel
 
 
-class PartialCointegrationTrader:
+class PartialCointegrationTraderSAPT:
     def __init__(
         self,
         model: PartialCointegrationModel,
@@ -24,9 +25,7 @@ class PartialCointegrationTrader:
         self.trades: List[dict] = []
 
     def run_backtest(
-        self,
-        y: pd.Series,
-        x: pd.Series,
+        self, y: pd.Series, x: pd.Series, structural_break_model=None, input_length=300
     ) -> pd.DataFrame:
         trades_log = []
         open_trade = None
@@ -45,6 +44,33 @@ class PartialCointegrationTrader:
 
                 if not self.model.is_cointegrated:
                     continue
+
+                if structural_break_model:
+                    # Extraire fenêtre temporelle
+                    spread_window = y_train.values - (
+                        self.model.beta * x_train.values + self.model.intercept
+                    )
+                    y_window = y_train.values
+                    x_window = x_train.values
+
+                    # Conversion en tensors torch
+                    spread_tensor = torch.tensor(
+                        spread_window[-input_length:], dtype=torch.float32
+                    ).unsqueeze(0)
+                    y_tensor = torch.tensor(
+                        y_window[-input_length:], dtype=torch.float32
+                    ).unsqueeze(0)
+                    x_tensor = torch.tensor(
+                        x_window[-input_length:], dtype=torch.float32
+                    ).unsqueeze(0)
+
+                    break_prob = structural_break_model(
+                        spread_tensor, y_tensor, x_tensor
+                    ).item()
+
+                    # Seuil à ajuster (ex. 0.5 ou calibré empiriquement)
+                    if break_prob > 0.5:
+                        continue  # on n'entre pas en position
 
                 # Use mean-reverting component for signal generation
                 # We calculate the latest spread

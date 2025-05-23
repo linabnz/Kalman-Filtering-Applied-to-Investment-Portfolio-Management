@@ -1,6 +1,6 @@
 # Import key classes for easier access
-from .cointegration import CointegrationModel
+from .cointegrationModel import CointegrationModel
 
 __all__ = [
-    'CointegrationModel',
+    "CointegrationModel",
 ]

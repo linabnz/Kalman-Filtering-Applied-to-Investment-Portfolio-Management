@@ -107,7 +107,7 @@ def download_jse_data(start_date="2015-01-01", end_date=None, min_history_years=
         f"Téléchargement de données pour {len(all_tickers)} actions JSE de {start_date} à {end_date}..."
     )
 
-    batch_size = 15
+    batch_size = 5
     all_data = pd.DataFrame()
 
     for i in range(0, len(all_tickers), batch_size):

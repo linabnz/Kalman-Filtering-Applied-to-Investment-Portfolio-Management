@@ -1,8 +1,6 @@
 from typing import List
 import pandas as pd
-from statsmodels.tsa.stattools import adfuller
-import numpy as np
-from models.cointegration import CointegrationModel
+from models.cointegrationModel import CointegrationModel
 
 
 class CointegrationTrader:
@@ -108,5 +106,4 @@ class CointegrationTrader:
                     )
                     open_trade = None
                     frozen_model = None
-
         return pd.DataFrame(trades_log)

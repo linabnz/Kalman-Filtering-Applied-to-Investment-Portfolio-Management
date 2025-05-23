@@ -110,16 +110,29 @@ def plot_cointegration_trade(
     axes[2].plot(transaction_return, label="Transaction Return", color="slateblue")
 
     if not trades.empty:
+        # Ensure transaction_return index has no duplicates
+        transaction_return = transaction_return[
+            ~transaction_return.index.duplicated(keep="first")
+        ]
+
+        # Align entries and transaction_return
+        valid_entries = entries["date"].drop_duplicates().isin(transaction_return.index)
+        aligned_entries = entries.loc[valid_entries]
+
         axes[2].scatter(
-            entries["date"],
-            transaction_return.loc[entries["date"]],
+            aligned_entries["date"],
+            transaction_return.reindex(aligned_entries["date"]).values,
             color="blue",
             marker="^",
             label="Entry Point",
         )
+
+        valid_exits = exits["date"].drop_duplicates().isin(transaction_return.index)
+        aligned_exits = exits.loc[valid_exits]
+
         axes[2].scatter(
-            exits["date"],
-            transaction_return.loc[exits["date"]],
+            aligned_exits["date"],
+            transaction_return.reindex(aligned_exits["date"]).values,
             color="red",
             marker="v",
             label="Exit Point",
@@ -140,7 +153,6 @@ def plot_cointegration_trade(
     plt.show()
 
 
-
 def plot_partial_cointegration_trade(
     prices: pd.DataFrame,
     ticker1: str,
@@ -153,7 +165,7 @@ def plot_partial_cointegration_trade(
 ):
     """
     Plot partial cointegration trading results including mean-reverting and random walk components.
-    
+
     Args:
         prices: DataFrame with price data
         ticker1: First ticker symbol
@@ -166,66 +178,66 @@ def plot_partial_cointegration_trade(
     """
     import matplotlib.pyplot as plt
     import matplotlib.dates as mdates
-    
+
     # Create figure with 4 subplots
     fig, axs = plt.subplots(4, 1, figsize=(15, 12), sharex=True)
-    
+
     # Plot prices
     axs[0].plot(prices[ticker1], label=ticker1)
     axs[0].plot(prices[ticker2], label=ticker2)
     axs[0].set_title(f"Prices: {ticker1} vs {ticker2} (beta={beta:.4f})")
     axs[0].legend()
     axs[0].grid(True)
-    
+
     # Plot positions
     if not trades.empty:
-        positions = trades[trades['position'] != 0]
-        
+        positions = trades[trades["position"] != 0]
+
         # Plot entry/exit points on price chart
         for idx, pos in positions.iterrows():
-            date = pos['date']
-            if abs(pos['position']) > 0:  # Entry point
+            date = pos["date"]
+            if abs(pos["position"]) > 0:  # Entry point
                 axs[0].scatter(
                     date,
                     prices.loc[date, ticker1],
-                    color='green' if pos['position'] < 0 else 'red',
-                    marker='^' if pos['position'] < 0 else 'v',
+                    color="green" if pos["position"] < 0 else "red",
+                    marker="^" if pos["position"] < 0 else "v",
                     s=100,
                 )
                 axs[0].scatter(
                     date,
                     prices.loc[date, ticker2],
-                    color='red' if pos['position'] < 0 else 'green',
-                    marker='v' if pos['position'] < 0 else '^',
+                    color="red" if pos["position"] < 0 else "green",
+                    marker="v" if pos["position"] < 0 else "^",
                     s=100,
                 )
-    
+
     # Plot mean-reverting and random walk components
     if mean_reverting is not None and random_walk is not None:
-        dates = prices.index[-len(mean_reverting):]
-        
-        axs[1].plot(dates, mean_reverting, label='Mean-Reverting', color='blue')
-        axs[1].axhline(y=0, color='black', linestyle='-', alpha=0.3)
-        axs[1].axhline(y=entry_threshold, color='red', linestyle='--', alpha=0.5)
-        axs[1].axhline(y=-entry_threshold, color='red', linestyle='--', alpha=0.5)
+        dates = prices.index[-len(mean_reverting) :]
+
+        axs[1].plot(dates, mean_reverting, label="Mean-Reverting", color="blue")
+        axs[1].axhline(y=0, color="black", linestyle="-", alpha=0.3)
+        axs[1].axhline(y=entry_threshold, color="red", linestyle="--", alpha=0.5)
+        axs[1].axhline(y=-entry_threshold, color="red", linestyle="--", alpha=0.5)
         axs[1].set_title("Mean-Reverting Component")
         axs[1].legend()
         axs[1].grid(True)
-        
-        axs[2].plot(dates, random_walk, label='Random Walk', color='green')
+
+        axs[2].plot(dates, random_walk, label="Random Walk", color="green")
         axs[2].set_title("Random Walk Component")
         axs[2].legend()
         axs[2].grid(True)
-    
+
     # Plot PnL
     if not trades.empty:
-        axs[3].plot(trades['date'], trades['pnl'], label='PnL', color='purple')
+        axs[3].plot(trades["date"], trades["pnl"], label="PnL", color="purple")
         axs[3].set_title("Trade PnL")
         axs[3].legend()
         axs[3].grid(True)
-    
+
     # Format x-axis
     plt.xlabel("Date")
     plt.tight_layout()
-    
+
     return fig, axs
