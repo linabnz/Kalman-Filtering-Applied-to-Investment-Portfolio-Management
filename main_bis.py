@@ -1,4 +1,5 @@
 import numpy as np
+import json
 from utils.download_jse_data import download_jse_data
 import os
 import pandas as pd
