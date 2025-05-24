@@ -7,9 +7,9 @@ seaborn
 plotly
 tensorflow
 torch
-pywt
 streamlit
 yfinance
 tqdm
 openpyxl
 scipy==1.14.0
+pywavelets

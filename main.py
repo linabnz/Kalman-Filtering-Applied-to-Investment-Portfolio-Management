@@ -70,7 +70,7 @@ if __name__ == "__main__":
     model = CointegrationModel(significance_level=0.05)
     trader = SimpleCointegrationTrader(
         model,
-        entry_threshold=1.25,
+        entry_threshold=2.0,
         stop_loss=0.05,
         profit_target=0.05,
         rolling_window=60,
@@ -168,4 +168,3 @@ if __name__ == "__main__":
     print(" - rolling_rewards.png")
     print(" - final_rewards_bar.png")
     print(" - reward_summary.csv")
-    print("Use these in your report or presentation.")
