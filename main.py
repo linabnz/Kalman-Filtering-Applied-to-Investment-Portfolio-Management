@@ -16,6 +16,8 @@ from strategies.cointegrationTrader import (
     PartialCointegrationTrader,
 )
 from models.structuralbreaksdetector import StructuralBreakDetector
+from strategies.SAPT import PartialCointegrationTraderSAPT
+import matplotlib.pyplot as plt
 
 if __name__ == "__main__":
     print("Lancement du téléchargement des données JSE...")
