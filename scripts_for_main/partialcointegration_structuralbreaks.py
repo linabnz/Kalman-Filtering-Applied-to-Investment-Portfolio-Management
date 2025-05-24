@@ -5,7 +5,7 @@ from models.structuralbreaksdetector import (
     generate_structural_break_dataset,
     StructuralBreakDetector,
 )
-from strategies.cointegrationTrader import PartialCointegrationTrader
+from strategies.SAPT import PartialCointegrationTraderSAPT
 from torch.utils.data import DataLoader
 import torch
 import torch.nn as nn
@@ -17,95 +17,79 @@ def run_partial_cointegration_with_structural_breaks(
 ):
     results = []
 
-    if "structural_breaks_model.pt" not in os.listdir("models"):
-        print(
-            "Le modèle de détection des ruptures structurelles n'est pas déjà entraîné."
-        )
+    dataset = generate_structural_break_dataset(
+        train_data,
+        cointegrated_pairs,
+        input_length=input_length,
+        future_window=90,
+        adf_threshold=0.2,
+    )
 
-        dataset = generate_structural_break_dataset(
-            train_data,
-            cointegrated_pairs,
-            input_length=input_length,
-            future_window=90,
-            adf_threshold=0.2,
-        )
+    train_loader = DataLoader(dataset, batch_size=64, shuffle=True)
+    model = StructuralBreakDetector(
+        input_length=input_length, wavelet_widths=np.arange(1, 11)
+    )
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    criterion = nn.BCELoss()
+    n_epochs = 3
 
-        train_loader = DataLoader(dataset, batch_size=64, shuffle=True)
-        model = StructuralBreakDetector(
-            input_length=input_length, wavelet_widths=np.arange(1, 11)
-        )
-        optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-        criterion = nn.BCELoss()
-        n_epochs = 5
+    model.train()
+    for epoch in range(n_epochs):
+        total_loss = 0
+        for spread, y_price, x_price, label in train_loader:
+            optimizer.zero_grad()
+            output = model(spread, y_price, x_price)
+            loss = criterion(output, label)
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item()
+            pred = (output > 0.5).float()
+            acc = (pred == label).float().mean()
+        print(f"Epoch {epoch+1}, Loss: {total_loss:.4f}, Acc: {acc:.2%}")
 
-        model.train()
-        for epoch in range(n_epochs):
-            total_loss = 0
-            for spread, y_price, x_price, label in train_loader:
-                optimizer.zero_grad()
-                output = model(spread, y_price, x_price)
-                loss = criterion(output, label)
-                loss.backward()
-                optimizer.step()
-                total_loss += loss.item()
-                pred = (output > 0.5).float()
-                acc = (pred == label).float().mean()
-            print(f"Epoch {epoch+1}, Loss: {total_loss:.4f}, Acc: {acc:.2%}")
+    test_dataset = generate_structural_break_dataset(
+        test_data,
+        cointegrated_pairs,
+        input_length=input_length,
+        future_window=90,
+        adf_threshold=0.2,
+    )
 
-        test_dataset = generate_structural_break_dataset(
-            test_data,
-            cointegrated_pairs,
-            input_length=input_length,
-            future_window=90,
-            adf_threshold=0.2,
-        )
+    test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False)
+    model.eval()
+    all_preds = []
+    all_labels = []
 
-        test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False)
-        model.eval()
-        all_preds = []
-        all_labels = []
+    with torch.no_grad():
+        for spread, y_price, x_price, label in test_loader:
+            output = model(spread, y_price, x_price)
+            all_preds.append(output.cpu())
+            all_labels.append(label.cpu())
 
-        with torch.no_grad():
-            for spread, y_price, x_price, label in test_loader:
-                output = model(spread, y_price, x_price)
-                all_preds.append(output.cpu())
-                all_labels.append(label.cpu())
+    # Concaténer les résultats
+    preds = torch.cat(all_preds).numpy().flatten()
+    labels = torch.cat(all_labels).numpy().flatten()
 
-        # Concaténer les résultats
-        preds = torch.cat(all_preds).numpy().flatten()
-        labels = torch.cat(all_labels).numpy().flatten()
+    binary_preds = (preds > 0.5).astype(int)
 
-        binary_preds = (preds > 0.5).astype(int)
+    print(f"Accuracy       : {accuracy_score(labels, binary_preds):.2%}")
+    print(f"Precision      : {precision_score(labels, binary_preds):.2%}")
+    print(f"Recall         : {recall_score(labels, binary_preds):.2%}")
+    print(f"ROC AUC Score  : {roc_auc_score(labels, preds):.4f}")
 
-        print(f"Accuracy       : {accuracy_score(labels, binary_preds):.2%}")
-        print(f"Precision      : {precision_score(labels, binary_preds):.2%}")
-        print(f"Recall         : {recall_score(labels, binary_preds):.2%}")
-        print(f"ROC AUC Score  : {roc_auc_score(labels, preds):.4f}")
-
-        torch.save(model.state_dict(), "models/structural_breaks_model.pt")
-    else:
-        print(
-            "Le modèle de détection des ruptures structurelles est déjà entraîné. Chargement du modèle..."
-        )
-        model = StructuralBreakDetector(
-            input_length=input_length, wavelet_widths=np.arange(1, 11)
-        )
-        model.load_state_dict(torch.load("models/structural_breaks_model.pt"))
-        model.eval()
+    torch.save(model.state_dict(), "models/structural_breaks_model.pt")
 
     # Utilisation du modèle pour prédire les ruptures structurelles
     for i, (ticker1, ticker2, p_value) in enumerate(cointegrated_pairs):
         co_model = PartialCointegrationModel(significance_level=0.05)
 
-        trader = PartialCointegrationTrader(
+        trader = PartialCointegrationTraderSAPT(
             co_model,
             entry_threshold=1.25,  # Valeur optimale selon le document
             stop_loss=0.05,
             profit_target=0.05,
             rolling_window=90,
             kalman_gain=0.7,  # Valeur optimale selon le document
-            structural_break_model=model,
-            input_length=input_length,
         )
 
         trades = trader.run_backtest(test_data[ticker1], test_data[ticker2])

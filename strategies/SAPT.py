@@ -3,7 +3,7 @@ import pandas as pd
 from statsmodels.tsa.stattools import adfuller
 import numpy as np
 import torch
-from models.partial_cointegration import PartialCointegrationModel
+from models.cointegrationModel import PartialCointegrationModel
 
 
 class PartialCointegrationTraderSAPT:
