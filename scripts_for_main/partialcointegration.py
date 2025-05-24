@@ -55,3 +55,8 @@ def run_partial_cointegration(cointegrated_pairs, trader, test_data, model, sect
                 "Nb_Trades": nb_trades,
             }
         )
+
+    total_pnl = sum([result["Total_Return"] for result in results])
+    mean_pnl = np.mean([result["Mean_PnL"] for result in results])
+    print(f"\nRendement total de toutes les paires: {total_pnl:.4f}")
+    print(f"Rendement moyen de toutes les paires: {mean_pnl:.4f}")

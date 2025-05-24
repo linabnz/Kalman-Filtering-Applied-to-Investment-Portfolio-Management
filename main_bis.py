@@ -1,3 +1,4 @@
+import numpy as np
 from utils.download_jse_data import download_jse_data
 import os
 import pandas as pd
@@ -5,11 +6,15 @@ from utils.data_loader import split_data
 from utils.statistical_tests import find_cointegrated_pairs
 from scripts_for_main.simplecointegration import run_simple_cointegration
 from scripts_for_main.partialcointegration import run_partial_cointegration
+from scripts_for_main.partialcointegration_structuralbreaks import (
+    run_partial_cointegration_with_structural_breaks,
+)
 from models.cointegrationModel import CointegrationModel, PartialCointegrationModel
 from strategies.cointegrationTrader import (
     SimpleCointegrationTrader,
     PartialCointegrationTrader,
 )
+from models.structuralbreaksdetector import StructuralBreakDetector
 
 if __name__ == "__main__":
     print("Lancement du téléchargement des données JSE...")
@@ -81,3 +86,14 @@ if __name__ == "__main__":
     )
 
     run_partial_cointegration(cointegrated_pairs, trader, test_data, model, sectors)
+
+    print(
+        "STRATEGIE 3 : CO-INTEGRATION PARTIELLE AVEC PREDICTION DE BREAKS STRUCTURELS"
+    )
+    run_partial_cointegration_with_structural_breaks(
+        cointegrated_pairs,
+        train_data,
+        test_data,
+        input_length=90,
+        sectors=sectors,
+    )

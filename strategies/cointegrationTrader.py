@@ -2,6 +2,8 @@ import pandas as pd
 from typing import List, Optional, Tuple, Union
 from abc import ABC, abstractmethod
 
+import torch
+
 
 class BaseCointegrationTrader(ABC):
     def __init__(
@@ -35,11 +37,28 @@ class BaseCointegrationTrader(ABC):
                 if not self.model.is_cointegrated:
                     continue
 
-                signal_data = self.get_trade_signal(y_t, x_t)
-                if signal_data is None:
+                signal = self.get_trade_signal(y_t, x_t)
+                if signal is None:
                     continue
 
-                z, extra = signal_data
+                if isinstance(signal, dict):
+                    z = signal.get("z")
+                    extra = {
+                        "mr_component": signal.get("mr_component", 0),
+                        "rw_component": signal.get("rw_component", 0),
+                        "break_probability": signal.get("break_probability", 0),
+                    }
+                else:
+                    z, extra = signal
+                if z is None:
+                    continue
+
+                extra = {
+                    "mr_component": extra.get("mr_component", 0),
+                    "rw_component": extra.get("rw_component", 0),
+                    "break_probability": extra.get("break_probability", 0),
+                }
+
                 if z > self.entry_threshold:
                     open_trade = self._build_trade("short_y_long_x", y_t, x_t, z, extra)
                 elif z < -self.entry_threshold:
@@ -87,6 +106,7 @@ class BaseCointegrationTrader(ABC):
             "entry_price_y": y_price,
             "entry_price_x": x_price,
             "entry_z": z,
+            "entry_mr": extra.get("mr_component", 0) if extra else 0,  # Add entry_mr
         }
         if extra:
             trade.update(extra)
@@ -98,6 +118,8 @@ class BaseCointegrationTrader(ABC):
         if "mr_component" in trade:
             log["mr_component"] = trade["mr_component"]
             log["rw_component"] = trade["rw_component"]
+        if "break_probability" in trade:
+            log["break_probability"] = trade["break_probability"]
         return log
 
     @abstractmethod
@@ -181,21 +203,57 @@ class PartialCointegrationTrader(BaseCointegrationTrader):
         profit_target=0.05,
         rolling_window=60,
         kalman_gain=0.7,
+        structural_break_model=None,
+        input_length=300,
     ):
         super().__init__(
             model, entry_threshold, stop_loss, profit_target, rolling_window
         )
         self.kalman_gain = kalman_gain
+        self.structural_break_model = structural_break_model
+        self.input_length = input_length
 
     def get_trade_signal(self, y_t, x_t):
+        break_prob = None
+
+        if self.structural_break_model:
+            spread_window = self.model.residuals[-self.input_length :]
+            if len(spread_window) < self.input_length:
+                return None
+
+            spread_tensor = torch.tensor(spread_window, dtype=torch.float32).unsqueeze(
+                0
+            )
+            y_tensor = torch.tensor(
+                [y_t] * self.input_length, dtype=torch.float32
+            ).unsqueeze(0)
+            x_tensor = torch.tensor(
+                [x_t] * self.input_length, dtype=torch.float32
+            ).unsqueeze(0)
+
+            break_prob = self.structural_break_model(
+                spread_tensor, y_tensor, x_tensor
+            ).item()
+
+            if break_prob > 0.5:
+                return {
+                    "z": None,
+                    "mr_component": None,
+                    "rw_component": None,
+                    "break_probability": break_prob,
+                }
+
         spread = y_t - (self.model.beta * x_t + self.model.intercept)
         last_mr = self.model.mean_reverting_component[-1]
         last_rw = self.model.random_walk_component[-1]
+
         mr_pred = self.model.rho * last_mr
         rw_pred = last_rw
         innovation = spread - (mr_pred + rw_pred)
+
         mr_t = mr_pred + self.kalman_gain * innovation
         rw_t = rw_pred + (1 - self.kalman_gain) * innovation
+
         std = (
             pd.Series(self.model.mean_reverting_component)
             .rolling(window=20)
@@ -204,20 +262,30 @@ class PartialCointegrationTrader(BaseCointegrationTrader):
         )
         if std == 0 or pd.isna(std):
             return None
+
         z = mr_t / std
-        return (z, {"mr_component": mr_t, "rw_component": rw_t})
+        return {
+            "z": z,
+            "mr_component": mr_t,
+            "rw_component": rw_t,
+            "break_probability": break_prob,
+        }
 
     def update_trade(self, y_t, x_t, model, trade):
         spread = y_t - (model.beta * x_t + model.intercept)
         last_mr = trade["mr_component"]
         last_rw = trade["rw_component"]
+
         mr_pred = model.rho * last_mr
         rw_pred = last_rw
         innovation = spread - (mr_pred + rw_pred)
+
         mr_t = mr_pred + model.kalman_gain * innovation
         rw_t = rw_pred + (1 - model.kalman_gain) * innovation
+
         std = abs(trade["entry_mr"] / trade["entry_z"])
         z = mr_t / std if std != 0 else 0
+
         pnl = (
             (
                 (y_t - trade["entry_price_y"])
@@ -229,6 +297,7 @@ class PartialCointegrationTrader(BaseCointegrationTrader):
                 - model.beta * (trade["entry_price_x"] - x_t)
             )
         )
+
         trade["mr_component"] = mr_t
         trade["rw_component"] = rw_t
         return z, pnl
