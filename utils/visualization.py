@@ -1,10 +1,10 @@
-from strategies.cointegrationtrading import CointegrationTrader
+from strategies.cointegrationTrader import SimpleCointegrationTrader
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
 
-def plot_trades(trader: CointegrationTrader, y: pd.Series, x: pd.Series):
+def plot_trades(trader: SimpleCointegrationTrader, y: pd.Series, x: pd.Series):
     model = trader.model
     spread = model.residuals
     z_scores = model.z_scores
@@ -140,11 +140,11 @@ def plot_cointegration_trade(
 
     axes[2].axhline(y=0, color="black", linestyle="--")
     axes[2].set_title(
-        f"Transaction Return; Return = {transaction_return.iloc[-1]:.2%} ; Duration = {len(transaction_return)} days"
+        f"Duration = {len(transaction_return)} days"
         if not transaction_return.empty
         else "Transaction Return"
     )
-    axes[2].set_ylabel("Transaction Return (%)")
+    axes[2].set_ylabel("Transaction Return")
     axes[2].legend()
     axes[2].grid(True, alpha=0.3)
 

@@ -67,7 +67,7 @@ if __name__ == "__main__":
     model = CointegrationModel(significance_level=0.05)
     trader = SimpleCointegrationTrader(
         model,
-        entry_threshold=2.5,
+        entry_threshold=1.25,
         stop_loss=0.05,
         profit_target=0.05,
         rolling_window=60,
