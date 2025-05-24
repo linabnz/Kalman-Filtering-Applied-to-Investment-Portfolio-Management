@@ -241,3 +241,92 @@ def plot_partial_cointegration_trade(
     plt.tight_layout()
 
     return fig, axs
+
+
+def plot_sapt_trade(
+    prices: pd.DataFrame,
+    ticker1: str,
+    ticker2: str,
+    trades: pd.DataFrame,
+    beta: float,
+    entry_threshold: float = 1.25,
+    mean_reverting: np.ndarray = None,
+    random_walk: np.ndarray = None,
+    break_probabilities: np.ndarray = None,
+    break_threshold: float = 0.5,
+):
+    """
+    Plot SAPT trading results with structural break prediction overlay.
+
+    Args:
+        prices: DataFrame with price data.
+        ticker1: First ticker symbol.
+        ticker2: Second ticker symbol.
+        trades: DataFrame with trade data.
+        beta: Hedge ratio.
+        entry_threshold: Threshold for mean-reverting signal.
+        mean_reverting: Array of mean-reverting component.
+        random_walk: Array of random walk component.
+        break_probabilities: Array of predicted structural break probabilities.
+        break_threshold: Probability threshold above which trades are avoided.
+    """
+    import matplotlib.pyplot as plt
+
+    fig, axs = plt.subplots(5, 1, figsize=(15, 14), sharex=True)
+
+    # 1. Price Plot
+    axs[0].plot(prices[ticker1], label=ticker1)
+    axs[0].plot(prices[ticker2], label=ticker2)
+    axs[0].set_title(f"Prices: {ticker1} vs {ticker2} (beta={beta:.4f})")
+    axs[0].legend()
+    axs[0].grid(True)
+
+    # 2. Trade Points
+    if not trades.empty:
+        for _, trade in trades.iterrows():
+            date = trade["date"]
+            color = "green" if trade["position"] < 0 else "red"
+            axs[0].scatter(
+                date, prices.loc[date, ticker1], color=color, marker="^", s=100
+            )
+            axs[0].scatter(
+                date, prices.loc[date, ticker2], color=color, marker="v", s=100
+            )
+
+    # 3. Mean-Reverting Component
+    if mean_reverting is not None:
+        dates = prices.index[-len(mean_reverting) :]
+        axs[1].plot(dates, mean_reverting, label="Mean-Reverting", color="blue")
+        axs[1].axhline(y=entry_threshold, color="red", linestyle="--", alpha=0.5)
+        axs[1].axhline(y=-entry_threshold, color="red", linestyle="--", alpha=0.5)
+        axs[1].set_title("Mean-Reverting Component")
+        axs[1].legend()
+        axs[1].grid(True)
+
+    # 4. Random Walk Component
+    if random_walk is not None:
+        axs[2].plot(dates, random_walk, label="Random Walk", color="green")
+        axs[2].set_title("Random Walk Component")
+        axs[2].legend()
+        axs[2].grid(True)
+
+    # 5. Break Probability
+    if break_probabilities is not None:
+        axs[3].plot(
+            dates, break_probabilities, label="Break Probability", color="orange"
+        )
+        axs[3].axhline(y=break_threshold, color="black", linestyle="--", alpha=0.5)
+        axs[3].set_title("Predicted Structural Break Probability")
+        axs[3].legend()
+        axs[3].grid(True)
+
+    # 6. PnL
+    if not trades.empty:
+        axs[4].plot(trades["date"], trades["pnl"], label="PnL", color="purple")
+        axs[4].set_title("Trade PnL")
+        axs[4].legend()
+        axs[4].grid(True)
+
+    plt.xlabel("Date")
+    plt.tight_layout()
+    return fig, axs
