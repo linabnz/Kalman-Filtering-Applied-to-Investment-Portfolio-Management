@@ -1,4 +1,5 @@
 import numpy as np
+import json
 from utils.download_jse_data import download_jse_data
 import os
 import pandas as pd
@@ -97,3 +98,38 @@ if __name__ == "__main__":
         input_length=90,
         sectors=sectors,
     )
+
+
+
+print("="*60)
+print(" Q-LEARNING STRATEGY: TRAINING AND EVALUATION".center(60))
+print("="*60)
+
+
+def afficher_resultats_qlearning(json_path=r"C:\Users\lbenzemma\Desktop\Projets Master2 MOSEF\Kalman-Filtering-Applied-to-Investment-Portfolio-Management-1\rewards_by_pair.json"):
+    print("\n" + "="*60)
+    print(" RÉSULTATS Q-LEARNING PAR PAIRE 100 episodes".center(60))
+    print("="*60)
+
+    # Charger les rewards depuis le fichier
+    with open(json_path, "r") as f:
+        rewards_data = json.load(f)
+
+    # Afficher les résultats par paire
+    for pair, rewards in rewards_data.items():
+        rewards = np.array(rewards)
+        total_reward = np.sum(rewards)
+        average_reward = np.mean(rewards)
+        final_reward = rewards[-1]
+
+        print(f"\n🔹 Résultats pour la paire : {pair}")
+        print(f"    -  Reward total : {total_reward:.2f}")
+        print(f"    -  Moyenne : {average_reward:.2f}")
+        print(f"    -  Dernier reward : {final_reward:.2f}")
+
+        for i in range(0, len(rewards), 20):
+            batch = rewards[i:i+20]
+            batch_mean = np.mean(batch)
+            print(f"       Batch {i//20 + 1} (épisodes {i}-{i+len(batch)-1}) : Moyenne = {batch_mean:.2f}")
+
+afficher_resultats_qlearning()
